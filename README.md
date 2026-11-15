@@ -13,18 +13,15 @@ browser, and the save never leaves your computer.
 
 I couldn't get my original Xbox Burnout 3 save to load in Takedawn, the PS5
 recompilation. Xbox signs Burnout 3 saves with a key that's unique to each
-console, so a save from one machine doesn't work anywhere else. We had to
+console, so a save from one machine doesn't work anywhere else. We (Claude and I) had to
 work out which keys the port signs with (all zeros, it turns out) and what
 had to change in the file before it would load.
 
-Then we found the game also keeps its own checksum at `0xE810`, which we
-couldn't find documented anywhere. That's why a save you edit and only
-re-sign still shows as unusable.
+Then we found the game also keeps its own checksum at `0xE810`, we
+couldn't find documented anywhere. Which is mainly the reason the was made for others 
 
 Once the save loaded, we started messing around trying to unlock the last
-two cars. The game works them out from your Signature Takedowns and Takedown
-Targets, and setting those unlocked the Oval Racer Special and the Euro
-Circuit Racer for a full 67/67.
+two cars I needed
 
 Nobody had made an editor for these saves, so this repo puts everything we
 learned in one place: the editor, the format notes and a fix-up script.

@@ -65,5 +65,9 @@ In short:
 - [xenophobentx/xboxrecomp](https://github.com/xenophobentx/xboxrecomp) (Takedawn): the checksum and profile layout, from its PS2-to-Xbox save converter.
 - XSavSig by Team X4 and PaulB.
 
+## License
+
+[MIT](LICENSE). You're free to use, copy, modify and share this code.
+
 Not affiliated with Electronic Arts or Criterion Games. Use at your own risk,
 and keep backups.

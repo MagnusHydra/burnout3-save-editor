@@ -39,7 +39,7 @@ E:\UDATA\4541005B\SaveImage.xbx, TitleImage.xbx, TitleMeta.xbx   <- icons/title,
 | **0xE37C** | 18 | **Profile name**, UTF-16LE, max 8 chars + null terminator. A new profile shows `BURNOUT`. **Confirmed.** |
 | 0xE38E, 0xE3A0 | 18 each | `P1`, `P2`, probably multiplayer names (**guess**) |
 | **0xE3B4** | u32 | **Burnout points**. **Confirmed** |
-| **0xE3B8** | u32 | **Crash damage**, in dollars. **Confirmed** |
+| **0xE3B8** | u32 | **Crash damage**, in dollars. It also unlocks the Heavyweight crash vehicles (see Unlocks). **Confirmed** |
 | **0xE3BC to 0xE4C4** | 67 × u32 | **Races per car**, by car number (see below). Their total equals race events played. The **favorite vehicle** is the car with the most races; a tie goes to the lower car number. **Confirmed** |
 | **0xE4C8 to 0xE4E0** | 7 × u32 | **Takedown counters**. Their total is all takedowns, as shown on the Select Option screen. **Confirmed** |
 | 0xE4E4 to 0xE570 | 36 × u32 | Takedowns per track (their total equalled the takedown total in an unedited save) |
@@ -94,6 +94,10 @@ The game works out unlocked cars from your progress every time it loads a
 profile. Unlocked cars are not stored. **Confirmed:**
 
 - Setting all 20 Signature Takedown bytes to `1` unlocked the **Oval Racer Special**.
+- **Crash damage** (0xE3B8) unlocks the **Heavyweight** crash vehicles:
+  - Lowering it to $9,999,999 locked 7 of them, for 60/67 cars, and Game Complete fell to 96%.
+  - Raising it to $999,999,999 brought back 67/67.
+  - $101,337,098 is the lowest value seen with all of them unlocked. The exact amount for each vehicle wasn't tested.
 - Raising these counters took Takedown Targets from 15/20 to 20/20. With all 4 Takedown Trophies, that unlocked the **Euro Circuit Racer** (67/67 cars):
 
   | Offset | Set to at least | What it turned out to be |

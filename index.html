@@ -49,6 +49,8 @@
   .stats input[type=number], .stats select { width: 100%; }
   .stats .time { display: flex; gap: 6px; align-items: center; }
   .stats .time input { width: 64px; }
+  .hint { font-size: .85em; color: var(--muted); }
+  .hint.warn { color: var(--bad); font-weight: 600; }
   .hidden { display: none; }
   #err { color: var(--bad); font-weight: 600; }
   footer { margin-top: 24px; font-size: .9em; }
@@ -90,7 +92,7 @@
       <div class="stats">
         <label>Playing time <span class="time"><input type="number" id="st-h" min="0" step="1" aria-label="Hours"> h <input type="number" id="st-m" min="0" max="59" step="1" aria-label="Minutes"> m <input type="number" id="st-s" min="0" max="59" step="1" aria-label="Seconds"> s</span></label>
         <label>Burnout points <input type="number" id="st-burnoutPoints" min="0" step="1"></label>
-        <label>Crash damage ($) <input type="number" id="st-crashDamage" min="0" step="1"></label>
+        <label>Crash damage ($) <input type="number" id="st-crashDamage" min="0" step="1" aria-describedby="crashHint"><small id="crashHint" class="hint">This unlocks the Heavyweight crash vehicles. Keep it at $101,337,098 or more to keep all of them; at $9,999,999, 7 were locked.</small></label>
         <label>Takedowns, offline <input type="number" id="st-takedowns" min="0" step="1"></label>
         <label>Takedowns, online <input type="number" id="st-takedownsOnline" min="0" step="1"></label>
         <label>Slams, offline <input type="number" id="st-slams" min="0" step="1"></label>
@@ -174,6 +176,13 @@
   var $ = function (id) { return document.getElementById(id); };
   var orig = null, counterInputs = [], origStats = null;
   var U32_STATS = ['burnoutPoints', 'crashDamage', 'takedowns', 'takedownsOnline', 'slams', 'slamsOnline', 'raceEvents', 'raceEventsOnline', 'crashEvents', 'crashEventsOnline'];
+  var ALL_HEAVYWEIGHTS_DAMAGE = 101337098;  // lowest crash damage seen with every Heavyweight unlocked
+
+  // Red only when the value is being lowered below that, so a save still in progress isn't flagged.
+  function updateCrashHint() {
+    var v = Number($('st-crashDamage').value);
+    $('crashHint').classList.toggle('warn', v < ALL_HEAVYWEIGHTS_DAMAGE && v < origStats.crashDamage);
+  }
 
   function showError(msg) { $('err').textContent = msg || ''; }
 
@@ -313,6 +322,7 @@
       updateTargetState();
       origStats = B3Save.stats(orig);
       fillStats(origStats);
+      updateCrashHint();
       $('result').textContent = '';
       $('editor').classList.remove('hidden');
     };
@@ -349,6 +359,7 @@
   }
 
   $('file').addEventListener('change', function (e) { load(e.target.files[0]); });
+  $('st-crashDamage').addEventListener('input', updateCrashHint);
   var drop = $('drop');
   ['dragenter', 'dragover'].forEach(function (t) { drop.addEventListener(t, function (e) { e.preventDefault(); drop.classList.add('over'); }); });
   ['dragleave', 'drop'].forEach(function (t) { drop.addEventListener(t, function (e) { e.preventDefault(); drop.classList.remove('over'); }); });

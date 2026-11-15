@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Burnout 3 Save Editor</title>
+<meta name="description" content="Edit Burnout 3: Takedown (Xbox) Profile 1 saves in your browser: name, Signature Takedowns, Headlines, Takedown Targets. Fixes the checksum and re-signs for Xbox or the Takedawn port.">
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --text: #1b1f24; --muted: #5b6470; --line: #d9dde3;
+    --accent: #d2341f; --accent-text: #ffffff; --ok: #1a7f37; --bad: #c62828; --chip: #eef0f3;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111418; --panel: #1a1e24; --text: #e7eaee; --muted: #9aa4b0; --line: #2c323a;
+      --accent: #ff5a3c; --accent-text: #111418; --ok: #4cc06a; --bad: #ff6b6b; --chip: #232931;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 860px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 1.6rem; margin: 0 0 4px; }
+  h2 { font-size: 1.05rem; margin: 0 0 8px; }
+  p { margin: 6px 0; }
+  .muted { color: var(--muted); }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-top: 16px; }
+  #drop { display: block; border: 2px dashed var(--line); border-radius: 10px; padding: 28px 16px; text-align: center; cursor: pointer; }
+  #drop.over { border-color: var(--accent); }
+  #drop input { display: none; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(58px, 1fr)); gap: 6px; margin: 8px 0; }
+  .grid label { background: var(--chip); border-radius: 6px; padding: 4px 6px; display: flex; gap: 4px; align-items: center; font-variant-numeric: tabular-nums; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+  input[type=text], input[type=number] { background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; font: inherit; }
+  input[type=text].key { width: 100%; max-width: 330px; font-family: ui-monospace, Consolas, monospace; }
+  button { font: inherit; border: 1px solid var(--line); background: var(--chip); color: var(--text); border-radius: 6px; padding: 6px 12px; cursor: pointer; }
+  button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 600; padding: 10px 18px; }
+  button:disabled { opacity: .5; cursor: default; }
+  .ok { color: var(--ok); font-weight: 600; }
+  .bad { color: var(--bad); font-weight: 600; }
+  .mono { font-family: ui-monospace, Consolas, monospace; font-size: .9em; word-break: break-all; }
+  table { border-collapse: collapse; width: 100%; }
+  td, th { border-bottom: 1px solid var(--line); padding: 3px 6px; text-align: left; font-variant-numeric: tabular-nums; }
+  td input { width: 130px; }
+  details summary { cursor: pointer; font-weight: 600; }
+  .counters { max-height: 360px; overflow: auto; margin-top: 8px; }
+  .hidden { display: none; }
+  #err { color: var(--bad); font-weight: 600; }
+  footer { margin-top: 24px; font-size: .9em; }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Burnout 3: Takedown save editor</h1>
+  <p class="muted">For the Xbox <span class="mono">Profile 1</span> save, on a real Xbox or the Takedawn PS5/PC port. Everything runs in your browser, and nothing is uploaded. <strong>Back up your save first.</strong></p>
+
+  <div class="panel">
+    <label id="drop">
+      <input type="file" id="file">
+      <strong>Choose or drop <span class="mono">Profile 1</span></strong><br>
+      <span class="muted">From <span class="mono">UDATA\4541005B\&lt;SaveID&gt;\</span></span>
+    </label>
+    <p id="err" role="alert"></p>
+  </div>
+
+  <div id="editor" class="hidden">
+    <div class="panel">
+      <h2>Loaded save</h2>
+      <div id="status"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Profile name</h2>
+      <div class="row">
+        <input type="text" id="name" maxlength="8" spellcheck="false" autocomplete="off">
+        <label><input type="checkbox" id="everywhere" checked> Also rename my records (<span id="slotCount">0</span> found)</label>
+      </div>
+      <p class="muted">Up to 8 characters. Your name is also stored on every record and best time you've set.</p>
+    </div>
+
+    <div class="panel">
+      <h2>Signature Takedowns <span class="muted" id="sigCount"></span></h2>
+      <p class="muted">All 20 unlock the <strong>Oval Racer Special</strong>. Confirmed in game.</p>
+      <div class="grid" id="sigGrid"></div>
+      <button type="button" data-all="sigGrid">Tick all</button>
+    </div>
+
+    <div class="panel">
+      <h2>Crash Headlines <span class="muted" id="headCount"></span></h2>
+      <div class="grid" id="headGrid"></div>
+      <button type="button" data-all="headGrid">Tick all</button>
+    </div>
+
+    <div class="panel">
+      <h2>Takedown Targets</h2>
+      <p class="muted">Raising these counters completed all 20 Takedown Targets (all 4 trophies) and unlocked the <strong>Euro Circuit Racer</strong>. Confirmed in game. Counters already higher are left alone.</p>
+      <div class="row"><button type="button" id="targets">Raise Takedown Target counters</button> <span id="targetState"></span></div>
+    </div>
+
+    <div class="panel">
+      <h2>World Tour events</h2>
+      <p id="events"></p>
+      <label><input type="checkbox" id="allEvents"> Set all 173 events to <span class="mono">03</span>, the value every 100% save has (gold). <em>Experimental</em></label>
+    </div>
+
+    <div class="panel">
+      <details>
+        <summary>Advanced: stat counters</summary>
+        <p class="muted">Raw 32-bit counters (<span class="mono">0xE3B4–0xE57C</span>, <span class="mono">0xE6A4–0xE6F0</span>). Most are unidentified, so only change them if you know what they are. See FORMAT.md.</p>
+        <div class="counters"><table><thead><tr><th>Offset</th><th>Value</th></tr></thead><tbody id="counterRows"></tbody></table></div>
+      </details>
+    </div>
+
+    <div class="panel">
+      <h2>Sign for</h2>
+      <div class="row">
+        <label><input type="radio" name="mode" value="port" checked> Takedawn port (PS5/PC), no console key</label>
+        <label><input type="radio" name="mode" value="xbox"> Real Xbox</label>
+      </div>
+      <div id="xboxKeys" class="hidden">
+        <p><label>HDD key of the Xbox that will load the save (32 hex digits)<br><input type="text" class="key" id="hddkey" spellcheck="false" autocomplete="off"></label></p>
+        <p><label>Burnout 3 AuthKey (32 hex digits, from the <a href="https://github.com/feudalnate/Original-Xbox-Gamesave-Resigners/tree/master/Burnout-3" target="_blank" rel="noopener">feudalnate resigner README</a>)<br><input type="text" class="key" id="authkey" spellcheck="false" autocomplete="off"></label></p>
+        <p class="muted">Read the HDD key with UnleashX, XBMC or ConfigMagic, or from an <span class="mono">EEPROM.bin</span> with LiveInfo.</p>
+      </div>
+    </div>
+
+    <div class="panel">
+      <button type="button" class="primary" id="save">Download fixed save</button>
+      <div id="result"></div>
+      <p class="muted">Put the downloaded <span class="mono">Profile 1</span> back in the same <span class="mono">&lt;SaveID&gt;</span> folder, replacing the old one.</p>
+    </div>
+  </div>
+
+  <footer class="muted">
+    The editor writes your changes, then the checksum at <span class="mono">0xE810</span>, then the HMAC-SHA1 signature. Format details are in FORMAT.md.
+    Not affiliated with EA or Criterion.
+  </footer>
+</main>
+
+<script src="b3save.js"></script>
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var orig = null, counterInputs = [];
+
+  function showError(msg) { $('err').textContent = msg || ''; }
+
+  function checkboxGrid(gridId, values) {
+    var grid = $(gridId);
+    grid.textContent = '';
+    values.forEach(function (on, i) {
+      var label = document.createElement('label');
+      var box = document.createElement('input');
+      box.type = 'checkbox'; box.checked = on;
+      box.addEventListener('change', updateCounts);
+      label.appendChild(box);
+      label.appendChild(document.createTextNode(String(i + 1)));
+      grid.appendChild(label);
+    });
+  }
+
+  function gridValues(gridId) {
+    return Array.prototype.map.call($(gridId).querySelectorAll('input'), function (b) { return b.checked; });
+  }
+
+  function updateCounts() {
+    var s = gridValues('sigGrid'), h = gridValues('headGrid');
+    $('sigCount').textContent = s.filter(Boolean).length + '/20';
+    $('headCount').textContent = h.filter(Boolean).length + '/10';
+  }
+
+  function updateTargetState() {
+    var raised = B3Save.TARGET_COUNTERS.every(function (t) {
+      var inp = counterInputs.filter(function (c) { return c.at === t[0]; })[0];
+      return inp && Number(inp.el.value) >= t[1];
+    });
+    $('targetState').innerHTML = raised ? '<span class="ok">Raised</span>' : '<span class="muted">Not all raised</span>';
+  }
+
+  function statusLine(label, good, detail) {
+    return '<p>' + label + ': <span class="' + (good ? 'ok' : 'bad') + '">' + (good ? 'OK' : 'Not valid') + '</span>' + (detail ? ' <span class="muted">' + detail + '</span>' : '') + '</p>';
+  }
+
+  function load(file) {
+    showError('');
+    if (!file) return;
+    if (file.size !== B3Save.SIZE) {
+      showError('That file is ' + file.size.toLocaleString() + ' bytes. A Burnout 3 Profile 1 is ' + B3Save.SIZE.toLocaleString() + ' bytes.');
+      return;
+    }
+    var reader = new FileReader();
+    reader.onload = function () {
+      orig = new Uint8Array(reader.result);
+      var info = B3Save.info(orig);
+      var ev = info.events, evText = [];
+      Object.keys(ev).sort(function (a, b) { return a - b; }).forEach(function (k) {
+        evText.push(ev[k] + ' × ' + (Number(k) === 0xFF ? 'not played (FF)' : Number(k).toString(16).toUpperCase().padStart(2, '0')));
+      });
+      var status = document.createElement('div');
+      var nameP = document.createElement('p');
+      nameP.textContent = 'Profile name: ' + info.name;
+      status.appendChild(nameP);
+      status.insertAdjacentHTML('beforeend',
+        statusLine('Checksum (0xE810)', info.port.checksumOk) +
+        statusLine('Signature for the Takedawn port', info.port.signatureOk, info.port.signatureOk ? '' : '(normal for a save from a real Xbox)'));
+      $('status').textContent = '';
+      $('status').appendChild(status);
+
+      $('name').value = info.name;
+      $('slotCount').textContent = B3Save.recordSlots(orig, info.name).length;
+      checkboxGrid('sigGrid', info.signatureTakedowns);
+      checkboxGrid('headGrid', info.headlines);
+      updateCounts();
+      $('events').textContent = evText.join(', ');
+      $('allEvents').checked = false;
+
+      var rows = $('counterRows');
+      rows.textContent = '';
+      counterInputs = [];
+      B3Save.counters(orig).forEach(function (c) {
+        var tr = document.createElement('tr');
+        var td1 = document.createElement('td'); td1.className = 'mono'; td1.textContent = '0x' + c.at.toString(16).toUpperCase();
+        var td2 = document.createElement('td');
+        var inp = document.createElement('input'); inp.type = 'number'; inp.min = 0; inp.max = 4294967295; inp.step = 1; inp.value = c.value;
+        inp.addEventListener('input', updateTargetState);
+        td2.appendChild(inp); tr.appendChild(td1); tr.appendChild(td2); rows.appendChild(tr);
+        counterInputs.push({ at: c.at, el: inp, original: c.value });
+      });
+      updateTargetState();
+      $('result').textContent = '';
+      $('editor').classList.remove('hidden');
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  function build() {
+    var x = orig.slice();
+    var info = B3Save.info(orig);
+    var name = $('name').value;
+    if (name !== info.name) {
+      var err = B3Save.nameError(name);
+      if (err) throw new Error(err);
+      B3Save.rename(x, name, $('everywhere').checked);
+    }
+    B3Save.setFlags(x, B3Save.SIG_TAKEDOWNS_AT, gridValues('sigGrid'));
+    B3Save.setFlags(x, B3Save.HEADLINES_AT, gridValues('headGrid'));
+    counterInputs.forEach(function (c) {
+      var v = Number(c.el.value);
+      if (!Number.isInteger(v) || v < 0 || v > 4294967295) throw new Error('Counter 0x' + c.at.toString(16).toUpperCase() + ' must be a whole number from 0 to 4294967295.');
+      if (v !== c.original) B3Save.setU32(x, c.at, v);
+    });
+    if ($('allEvents').checked) for (var i = 0; i < B3Save.EVENTS; i++) x[B3Save.EVENTS_AT + i] = 3;
+
+    var auth = null, hdd = null;
+    if (document.querySelector('input[name=mode]:checked').value === 'xbox') {
+      hdd = B3Save.parseKey($('hddkey').value);
+      auth = B3Save.parseKey($('authkey').value);
+      if (!hdd) throw new Error('The HDD key must be 32 hex digits.');
+      if (!auth) throw new Error('The AuthKey must be 32 hex digits.');
+    }
+    return { bytes: B3Save.fix(x, auth, hdd), auth: auth, hdd: hdd };
+  }
+
+  $('file').addEventListener('change', function (e) { load(e.target.files[0]); });
+  var drop = $('drop');
+  ['dragenter', 'dragover'].forEach(function (t) { drop.addEventListener(t, function (e) { e.preventDefault(); drop.classList.add('over'); }); });
+  ['dragleave', 'drop'].forEach(function (t) { drop.addEventListener(t, function (e) { e.preventDefault(); drop.classList.remove('over'); }); });
+  drop.addEventListener('drop', function (e) { load(e.dataTransfer.files[0]); });
+
+  document.querySelectorAll('[data-all]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      $(btn.getAttribute('data-all')).querySelectorAll('input').forEach(function (b) { b.checked = true; });
+      updateCounts();
+    });
+  });
+
+  $('targets').addEventListener('click', function () {
+    B3Save.TARGET_COUNTERS.forEach(function (t) {
+      counterInputs.forEach(function (c) { if (c.at === t[0] && Number(c.el.value) < t[1]) c.el.value = t[1]; });
+    });
+    updateTargetState();
+  });
+
+  $('name').addEventListener('input', function () {
+    var err = B3Save.nameError($('name').value);
+    showError(err && $('name').value !== '' ? err : '');
+  });
+
+  document.querySelectorAll('input[name=mode]').forEach(function (r) {
+    r.addEventListener('change', function () { $('xboxKeys').classList.toggle('hidden', r.value !== 'xbox' || !r.checked); });
+  });
+
+  $('save').addEventListener('click', function () {
+    showError('');
+    var out;
+    try { out = build(); } catch (e) { showError(e.message); return; }
+    var c = B3Save.check(out.bytes, out.auth, out.hdd);
+    var result = $('result');
+    result.innerHTML = '<p>Checksum <span class="mono">' + c.checksum.toString(16).toUpperCase().padStart(8, '0') + '</span>, signature <span class="mono">' + c.signature + '</span> ' +
+      (c.checksumOk && c.signatureOk ? '<span class="ok">written</span>' : '<span class="bad">check failed</span>') + '</p>';
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([out.bytes], { type: 'application/octet-stream' }));
+    a.download = 'Profile 1';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  });
+})();
+</script>
+</body>
+</html>

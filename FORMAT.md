@@ -35,12 +35,23 @@ E:\UDATA\4541005B\SaveImage.xbx, TitleImage.xbx, TitleMeta.xbx   <- icons/title,
 | Offset | Size | Contents |
 |---|---|---|
 | 0xE374 | u32 | Unknown, different in every profile (ID or seed?) |
-| 0xE378 | float | Play time (units not confirmed) |
+| **0xE378** | f32 | **Playing time in seconds** (83,518 shows as 23 HOURS 11 MINS). **Confirmed** |
 | **0xE37C** | 18 | **Profile name**, UTF-16LE, max 8 chars + null terminator. A new profile shows `BURNOUT`. **Confirmed.** |
 | 0xE38E, 0xE3A0 | 18 each | `P1`, `P2`, probably multiplayer names (**guess**) |
-| 0xE3B4 to 0xE57F | u32 each | Stat counters |
-| 0xE580 to 0xE6A3 | | Mostly floats (stats, unidentified) |
-| 0xE6A4 to 0xE6F3 | 20 × u32 | 20 counters, probably Takedown Target progress (**guess**) |
+| **0xE3B4** | u32 | **Burnout points**. **Confirmed** |
+| **0xE3B8** | u32 | **Crash damage**, in dollars. **Confirmed** |
+| **0xE3BC to 0xE4C4** | 67 × u32 | **Races per car**, by car number (see below). Their total equals race events played. The **favorite vehicle** is the car with the most races; a tie goes to the lower car number. **Confirmed** |
+| **0xE4C8 to 0xE4E0** | 7 × u32 | **Takedown counters**. Their total is all takedowns, as shown on the Select Option screen. **Confirmed** |
+| 0xE4E4 to 0xE570 | 36 × u32 | Takedowns per track (their total equalled the takedown total in an unedited save) |
+| **0xE574** | u32 | **Takedowns, online**. Driver Details shows *offline* takedowns as the total of 0xE4C8 to 0xE4E0 minus this. **Confirmed** |
+| **0xE578, 0xE57C** | u32 each | **Slams, offline** and **online**. **Confirmed** |
+| **0xE580 to 0xE60C** | 36 × f32 | **Longest oncoming per track**, in metres. The stats screen shows the highest value and its track. **Confirmed** |
+| **0xE610** | u32 | **Longest oncoming car** (car number). **Confirmed** |
+| **0xE614 to 0xE6A0** | 36 × f32 | **Longest drift per track**, in metres. **Confirmed** |
+| **0xE6A4** | u32 | **Longest drift car** (car number). **Confirmed** |
+| **0xE6A8, 0xE6AC** | u32 each | **Race events, online** and **Crash events, online**. **Confirmed** |
+| **0xE6B0, 0xE6B4** | u32 each | **Race events, offline** and **Crash events, offline**. **Confirmed** |
+| 0xE6B8 to 0xE6F0 | 15 × u32 | Takedown Target progress (see Unlocks below; only partly identified) |
 | 0xE6F4 | u32 | `0xFFFFFFFF` |
 | **0xE6FA to 0xE7A6** | 173 × u8 | **World Tour event results**, one byte per event. `0xFF` = not played, `0x03` in 100% saves (gold) |
 | **0xE7A7 to 0xE7BA** | 20 × u8 | **Signature Takedowns**, `1` = done. **Confirmed** (count matches Driver Details) |
@@ -48,6 +59,26 @@ E:\UDATA\4541005B\SaveImage.xbx, TitleImage.xbx, TitleMeta.xbx   <- icons/title,
 | 0xE7C5 to 0xE807 | 67 × u8 | Zero in every save seen (one per car? **guess**) |
 | 0xE808 to 0xE80E | | Unknown (`0xFF` in a new profile) |
 | 0xE80F | u8 | Profile slot in use, `0` = used (from the Takedawn source) |
+
+Distances are stored in metres. The game shows feet, rounded down (metres ÷ 0.3048).
+Only two track numbers are known: 0 = Waterfront and 34 = Tropical Drive.
+
+### Car numbers
+
+Cars are numbered 0 to 66 in garage order:
+
+| Numbers | Cars |
+|---|---|
+| 0 to 9 | Compact: Type 1, Type 2, Type 3, Tuned, Modified, Custom, Assassin, Prototype, DX, Dominator |
+| 10 to 19 | Muscle, in the same order |
+| 20 to 29 | Coupe, in the same order |
+| 30 to 39 | Sports, in the same order |
+| 40 to 49 | Super, in the same order |
+| 50 to 55 | Oval Racer Special, Custom Coupe Ultimate, Euro Circuit Racer, Classic Hotrod, US Circuit Racer, World Circuit Racer |
+| 56 to 66 | Heavy Pick Up, 4WD Racer, SUV Deluxe, 4WD Heavy Duty, B Team Van, Delivery Truck, Tractor Cab, Longnose Cab, City Bus, Trash Truck, Fire Truck |
+
+Confirmed in game for numbers 46, 48, 49, 51, 52 and 53. The rest follow the
+garage order listed on the Burnout wiki.
 
 ### The name is stored about 480 times
 
@@ -65,17 +96,18 @@ profile. Unlocked cars are not stored. **Confirmed:**
 - Setting all 20 Signature Takedown bytes to `1` unlocked the **Oval Racer Special**.
 - Raising these counters took Takedown Targets from 15/20 to 20/20. With all 4 Takedown Trophies, that unlocked the **Euro Circuit Racer** (67/67 cars):
 
-  | Offset | Set to at least |
-  |---|---|
-  | 0xE3C0 | 1 |
-  | 0xE3E4 | 2 |
-  | 0xE4D4 | 2000 (probably total takedowns, for the 1,500 / 2,000 Champion targets; **guess**) |
-  | 0xE548 | 9 |
-  | 0xE6BC | 2 |
-  | 0xE6C0 | 2 |
-  | 0xE6C8 | 2 |
+  | Offset | Set to at least | What it turned out to be |
+  |---|---|---|
+  | 0xE4D4 | 2000 | A takedown counter. It brings total takedowns over the 1,500 and 2,000 Champion targets |
+  | 0xE6BC | 2 | Takedown Target progress |
+  | 0xE6C0 | 2 | Takedown Target progress |
+  | 0xE6C8 | 2 | Takedown Target progress |
+  | 0xE3C0 | 1 | Races in the Compact Type 2. Probably not needed |
+  | 0xE3E4 | 2 | Races in the Muscle Type 1. Probably not needed |
+  | 0xE548 | 9 | Takedowns on one track. Probably not needed |
 
-  These were all raised together. Which ones are needed individually wasn't tested.
+  These were all raised together. The last three were identified later as
+  other stats, so the first four are most likely the ones that matter.
 
 ## Checksum (0xE810)
 

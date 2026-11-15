@@ -13,15 +13,18 @@ browser, and the save never leaves your computer.
 
 I couldn't get my original Xbox Burnout 3 save to load in Takedawn, the PS5
 recompilation. Xbox signs Burnout 3 saves with a key that's unique to each
-console, so a save from one machine doesn't work anywhere else. We (Claude and I) had to
+console, so a save from one machine doesn't work anywhere else. We had to
 work out which keys the port signs with (all zeros, it turns out) and what
 had to change in the file before it would load.
 
-Then we found the game also keeps its own checksum at `0xE810`, we
-couldn't find documented anywhere. Which is mainly the reason the was made for others 
+Then we found the game also keeps its own checksum at `0xE810`, which we
+couldn't find documented anywhere. That's why a save you edit and only
+re-sign still shows as unusable.
 
 Once the save loaded, we started messing around trying to unlock the last
-two cars I needed
+two cars. The game works them out from your Signature Takedowns and Takedown
+Targets, and setting those unlocked the Oval Racer Special and the Euro
+Circuit Racer for a full 67/67.
 
 Nobody had made an editor for these saves, so this repo puts everything we
 learned in one place: the editor, the format notes and a fix-up script.
@@ -31,11 +34,12 @@ learned in one place: the editor, the format notes and a fix-up script.
 | | Status |
 |---|---|
 | Profile name, including your name on every record and best time | Confirmed in game |
+| Stats: playing time, Burnout points, crash damage, takedowns, slams, race and crash events (offline and online), favorite vehicle, and longest oncoming and drift with their cars | Confirmed in game |
 | Signature Takedowns (20). All 20 unlock the **Oval Racer Special** | Confirmed in game |
 | Crash Headlines (10) | Count confirmed |
 | Takedown Targets: raise the counters to complete all 20 (4 trophies), which unlocks the **Euro Circuit Racer** | Confirmed in game |
 | World Tour events: set all 173 to `03` (the value 100% saves have) | Experimental |
-| Raw stat counters | Advanced, mostly unidentified |
+| Raw stat counters, such as races per car and takedowns per track | Advanced |
 
 The game works out unlocked cars from your progress each time it loads, so
 completing the Signature Takedowns and Takedown Targets is enough to unlock

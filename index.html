@@ -43,6 +43,12 @@
   td input { width: 130px; }
   details summary { cursor: pointer; font-weight: 600; }
   .counters { max-height: 360px; overflow: auto; margin-top: 8px; }
+  select { background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; font: inherit; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px 16px; margin: 8px 0; }
+  .stats label { display: flex; flex-direction: column; gap: 4px; }
+  .stats input[type=number], .stats select { width: 100%; }
+  .stats .time { display: flex; gap: 6px; align-items: center; }
+  .stats .time input { width: 64px; }
   .hidden { display: none; }
   #err { color: var(--bad); font-weight: 600; }
   footer { margin-top: 24px; font-size: .9em; }
@@ -79,6 +85,30 @@
     </div>
 
     <div class="panel">
+      <h2>Stats</h2>
+      <p class="muted">The numbers on Driver Details → Stats. Every field was checked in game.</p>
+      <div class="stats">
+        <label>Playing time <span class="time"><input type="number" id="st-h" min="0" step="1" aria-label="Hours"> h <input type="number" id="st-m" min="0" max="59" step="1" aria-label="Minutes"> m <input type="number" id="st-s" min="0" max="59" step="1" aria-label="Seconds"> s</span></label>
+        <label>Burnout points <input type="number" id="st-burnoutPoints" min="0" step="1"></label>
+        <label>Crash damage ($) <input type="number" id="st-crashDamage" min="0" step="1"></label>
+        <label>Takedowns, offline <input type="number" id="st-takedowns" min="0" step="1"></label>
+        <label>Takedowns, online <input type="number" id="st-takedownsOnline" min="0" step="1"></label>
+        <label>Slams, offline <input type="number" id="st-slams" min="0" step="1"></label>
+        <label>Slams, online <input type="number" id="st-slamsOnline" min="0" step="1"></label>
+        <label>Race events, offline <input type="number" id="st-raceEvents" min="0" step="1"></label>
+        <label>Race events, online <input type="number" id="st-raceEventsOnline" min="0" step="1"></label>
+        <label>Crash events, offline <input type="number" id="st-crashEvents" min="0" step="1"></label>
+        <label>Crash events, online <input type="number" id="st-crashEventsOnline" min="0" step="1"></label>
+        <label>Favorite vehicle <select id="st-favorite"></select></label>
+        <label>Longest oncoming (ft) <input type="number" id="st-oncoming" min="0" step="1"></label>
+        <label>Longest oncoming car <select id="st-oncomingCar"></select></label>
+        <label>Longest drift (ft) <input type="number" id="st-drift" min="0" step="1"></label>
+        <label>Longest drift car <select id="st-driftCar"></select></label>
+      </div>
+      <p class="muted">The favorite vehicle is the car with the most races, so picking one gives it one more race than the current favorite. Longest distances stay on the track that already holds them.</p>
+    </div>
+
+    <div class="panel">
       <h2>Signature Takedowns <span class="muted" id="sigCount"></span></h2>
       <p class="muted">All 20 unlock the <strong>Oval Racer Special</strong>. Confirmed in game.</p>
       <div class="grid" id="sigGrid"></div>
@@ -106,7 +136,7 @@
     <div class="panel">
       <details>
         <summary>Advanced: stat counters</summary>
-        <p class="muted">Raw 32-bit counters (<span class="mono">0xE3B4–0xE57C</span>, <span class="mono">0xE6A4–0xE6F0</span>). Most are unidentified, so only change them if you know what they are. See FORMAT.md.</p>
+        <p class="muted">Raw 32-bit counters (<span class="mono">0xE3B4–0xE57C</span>, <span class="mono">0xE6A4–0xE6F0</span>), such as races per car and takedowns per track. FORMAT.md says what each one is. The Stats section above covers the main ones, and its values win if you change both.</p>
         <div class="counters"><table><thead><tr><th>Offset</th><th>Value</th></tr></thead><tbody id="counterRows"></tbody></table></div>
       </details>
     </div>
@@ -142,9 +172,62 @@
 (function () {
   'use strict';
   var $ = function (id) { return document.getElementById(id); };
-  var orig = null, counterInputs = [];
+  var orig = null, counterInputs = [], origStats = null;
+  var U32_STATS = ['burnoutPoints', 'crashDamage', 'takedowns', 'takedownsOnline', 'slams', 'slamsOnline', 'raceEvents', 'raceEventsOnline', 'crashEvents', 'crashEventsOnline'];
 
   function showError(msg) { $('err').textContent = msg || ''; }
+
+  function carSelect(id, value) {
+    var sel = $(id);
+    sel.textContent = '';
+    B3Save.CARS.forEach(function (name, i) {
+      var o = document.createElement('option'); o.value = i; o.textContent = name; sel.appendChild(o);
+    });
+    if (value >= B3Save.CARS.length) {
+      var o = document.createElement('option'); o.value = value; o.textContent = 'Unknown car #' + value; sel.appendChild(o);
+    }
+    sel.value = String(value);
+  }
+
+  function fillStats(s) {
+    var secs = Math.floor(s.playSeconds);
+    $('st-h').value = Math.floor(secs / 3600);
+    $('st-m').value = Math.floor(secs / 60) % 60;
+    $('st-s').value = secs % 60;
+    U32_STATS.forEach(function (k) { $('st-' + k).value = s[k]; });
+    carSelect('st-favorite', s.favorite);
+    $('st-oncoming').value = s.oncoming.feet;
+    carSelect('st-oncomingCar', s.oncoming.car);
+    $('st-drift').value = s.drift.feet;
+    carSelect('st-driftCar', s.drift.car);
+  }
+
+  function whole(id, label, max) {
+    var v = Number($(id).value);
+    if (max === undefined) max = 4294967295;
+    if (!Number.isInteger(v) || v < 0 || v > max) throw new Error(label + ' must be a whole number from 0 to ' + max + '.');
+    return v;
+  }
+
+  // Only the stats that differ from the loaded save, so untouched values keep their exact bytes.
+  function changedStats() {
+    var st = {};
+    var secs = whole('st-h', 'Hours', 1000000) * 3600 + whole('st-m', 'Minutes', 59) * 60 + whole('st-s', 'Seconds', 59);
+    if (secs !== Math.floor(origStats.playSeconds)) st.playSeconds = secs;
+    U32_STATS.forEach(function (k) {
+      var v = whole('st-' + k, $('st-' + k).parentNode.firstChild.textContent.trim());
+      if (v !== origStats[k]) st[k] = v;
+    });
+    // Offline takedowns are shown as total minus online, so keep the offline figure when only online changes.
+    if (st.takedownsOnline !== undefined && st.takedowns === undefined) st.takedowns = origStats.takedowns;
+    var fav = Number($('st-favorite').value);
+    if (fav !== origStats.favorite) st.favorite = fav;
+    [['oncoming', 'Longest oncoming'], ['drift', 'Longest drift']].forEach(function (r) {
+      var feet = whole('st-' + r[0], r[1]), car = Number($('st-' + r[0] + 'Car').value);
+      if (feet !== origStats[r[0]].feet || car !== origStats[r[0]].car) st[r[0]] = { feet: feet, car: car };
+    });
+    return st;
+  }
 
   function checkboxGrid(gridId, values) {
     var grid = $(gridId);
@@ -228,6 +311,8 @@
         counterInputs.push({ at: c.at, el: inp, original: c.value });
       });
       updateTargetState();
+      origStats = B3Save.stats(orig);
+      fillStats(origStats);
       $('result').textContent = '';
       $('editor').classList.remove('hidden');
     };
@@ -250,6 +335,7 @@
       if (!Number.isInteger(v) || v < 0 || v > 4294967295) throw new Error('Counter 0x' + c.at.toString(16).toUpperCase() + ' must be a whole number from 0 to 4294967295.');
       if (v !== c.original) B3Save.setU32(x, c.at, v);
     });
+    B3Save.setStats(x, changedStats());
     if ($('allEvents').checked) for (var i = 0; i < B3Save.EVENTS; i++) x[B3Save.EVENTS_AT + i] = 3;
 
     var auth = null, hdd = null;

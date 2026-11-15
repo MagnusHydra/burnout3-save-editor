@@ -20,6 +20,31 @@
   var COUNTER_RANGES = [[0xE3B4, 0xE57C], [0xE6A4, 0xE6F0]];
   var ZERO_KEY = new Uint8Array(16);
 
+  // Driver Details > Stats, matched against the game's stats screen.
+  var PLAY_TIME_AT = 0xE378;        // f32 seconds
+  var BURNOUT_POINTS_AT = 0xE3B4;   // u32
+  var CRASH_DAMAGE_AT = 0xE3B8;     // u32 dollars
+  var CAR_RACES_AT = 0xE3BC;        // 67 x u32 races per car; favorite = most (first wins a tie)
+  var TAKEDOWNS_AT = 0xE4C8, TAKEDOWN_TYPES = 7;  // 7 x u32; their total is all takedowns
+  var TAKEDOWNS_ONLINE_AT = 0xE574; // u32; "Takedowns - offline" is the total above minus this
+  var SLAMS_AT = 0xE578, SLAMS_ONLINE_AT = 0xE57C;                  // u32
+  var RACE_EVENTS_AT = 0xE6B0, RACE_EVENTS_ONLINE_AT = 0xE6A8;      // u32 race events played
+  var CRASH_EVENTS_AT = 0xE6B4, CRASH_EVENTS_ONLINE_AT = 0xE6AC;    // u32 crash events played
+  // 36 per-track bests in metres, then the u32 car that set the overall best.
+  var ONCOMING = { at: 0xE580, carAt: 0xE610 };
+  var DRIFT = { at: 0xE614, carAt: 0xE6A4 };
+  var TRACKS = 36;
+  var FEET = 0.3048;
+  var CARS = [
+    'Compact Type 1', 'Compact Type 2', 'Compact Type 3', 'Tuned Compact', 'Modified Compact', 'Custom Compact', 'Assassin Compact', 'Compact Prototype', 'Compact DX', 'Dominator Compact',
+    'Muscle Type 1', 'Muscle Type 2', 'Muscle Type 3', 'Tuned Muscle', 'Modified Muscle', 'Custom Muscle', 'Assassin Muscle', 'Muscle Prototype', 'Muscle DX', 'Dominator Muscle',
+    'Coupe Type 1', 'Coupe Type 2', 'Coupe Type 3', 'Tuned Coupe', 'Modified Coupe', 'Custom Coupe', 'Assassin Coupe', 'Coupe Prototype', 'Coupe DX', 'Dominator Coupe',
+    'Sports Type 1', 'Sports Type 2', 'Sports Type 3', 'Tuned Sports', 'Modified Sports', 'Custom Sports', 'Assassin Sports', 'Sports Prototype', 'Sports DX', 'Dominator Sports',
+    'Super Type 1', 'Super Type 2', 'Super Type 3', 'Tuned Super', 'Modified Super', 'Custom Super', 'Assassin Super', 'Super Prototype', 'Super DX', 'Dominator Super',
+    'Oval Racer Special', 'Custom Coupe Ultimate', 'Euro Circuit Racer', 'Classic Hotrod', 'US Circuit Racer', 'World Circuit Racer',
+    'Heavy Pick Up', '4WD Racer', 'SUV Deluxe', '4WD Heavy Duty', 'B Team Van', 'Delivery Truck', 'Tractor Cab', 'Longnose Cab', 'City Bus', 'Trash Truck', 'Fire Truck'
+  ];
+
   function sha1(msg) {
     var len = msg.length;
     var padded = ((len + 9 + 63) >> 6) << 6;
@@ -202,6 +227,100 @@
     return counts;
   }
 
+  function view(buf) { return new DataView(buf.buffer, buf.byteOffset, buf.byteLength); }
+  function f32(buf, at) { return view(buf).getFloat32(at, true); }
+  function setF32(buf, at, v) { view(buf).setFloat32(at, v, true); }
+
+  function longest(buf, block) {
+    var best = 0, index = 0, next = 0;
+    for (var i = 0; i < TRACKS; i++) {
+      var m = f32(buf, block.at + i * 4);
+      if (m > best) { next = best; best = m; index = i; } else if (m > next) next = m;
+    }
+    return { feet: Math.floor(best / FEET), nextFeet: Math.floor(next / FEET), track: index, car: u32(buf, block.carAt) };
+  }
+
+  // Writes the record on the track that already holds it, so the game keeps showing that track.
+  function setLongest(buf, block, feet, car) {
+    var cur = longest(buf, block);
+    if (feet < cur.nextFeet) throw new Error('A longest distance below ' + cur.nextFeet + ' ft would make another track the record holder.');
+    setF32(buf, block.at + cur.track * 4, (feet + 0.25) * FEET);
+    setU32(buf, block.carAt, car);
+  }
+
+  function favorite(buf) {
+    var best = -1, index = 0;
+    for (var i = 0; i < CARS.length; i++) { var n = u32(buf, CAR_RACES_AT + i * 4); if (n > best) { best = n; index = i; } }
+    return index;
+  }
+
+  // The favorite is the car with the most races, so give the chosen car one more than the current leader.
+  function setFavorite(buf, car) {
+    if (favorite(buf) === car) return;
+    var most = u32(buf, CAR_RACES_AT + favorite(buf) * 4);
+    var at = CAR_RACES_AT + car * 4;
+    // Ties go to the lower car number, so a higher number needs to strictly lead.
+    setU32(buf, at, most + 1);
+  }
+
+  function takedownTypes(buf) {
+    var out = [];
+    for (var i = 0; i < TAKEDOWN_TYPES; i++) out.push(u32(buf, TAKEDOWNS_AT + i * 4));
+    return out;
+  }
+
+  function sum(values) { return values.reduce(function (a, b) { return a + b; }, 0); }
+
+  // Offline takedowns are the type counters' total minus online takedowns; the change goes on the largest counter.
+  function setTakedowns(buf, offline) {
+    var t = takedownTypes(buf), online = u32(buf, TAKEDOWNS_ONLINE_AT);
+    var big = t.indexOf(Math.max.apply(null, t));
+    var v = t[big] + (offline + online - sum(t));
+    if (v < 0) throw new Error('Offline takedowns can only go down to ' + Math.max(0, sum(t) - t[big] - online) + ' here. Lower the individual counters under Advanced.');
+    setU32(buf, TAKEDOWNS_AT + big * 4, v);
+  }
+
+  function stats(buf) {
+    var t = takedownTypes(buf), online = u32(buf, TAKEDOWNS_ONLINE_AT);
+    return {
+      playSeconds: f32(buf, PLAY_TIME_AT),
+      burnoutPoints: u32(buf, BURNOUT_POINTS_AT),
+      crashDamage: u32(buf, CRASH_DAMAGE_AT),
+      takedowns: sum(t) - online,
+      takedownsOnline: online,
+      takedownTypes: t,
+      slams: u32(buf, SLAMS_AT),
+      slamsOnline: u32(buf, SLAMS_ONLINE_AT),
+      raceEvents: u32(buf, RACE_EVENTS_AT),
+      raceEventsOnline: u32(buf, RACE_EVENTS_ONLINE_AT),
+      crashEvents: u32(buf, CRASH_EVENTS_AT),
+      crashEventsOnline: u32(buf, CRASH_EVENTS_ONLINE_AT),
+      oncoming: longest(buf, ONCOMING),
+      drift: longest(buf, DRIFT),
+      favorite: favorite(buf)
+    };
+  }
+
+  // Applies only the fields that are present: {playSeconds, burnoutPoints, crashDamage, takedowns, takedownsOnline,
+  // slams, slamsOnline, raceEvents, raceEventsOnline, crashEvents, crashEventsOnline, oncoming: {feet, car},
+  // drift: {feet, car}, favorite}. Changing online takedowns alone also changes the offline figure the game shows.
+  function setStats(buf, s) {
+    if (s.playSeconds !== undefined) setF32(buf, PLAY_TIME_AT, s.playSeconds);
+    if (s.burnoutPoints !== undefined) setU32(buf, BURNOUT_POINTS_AT, s.burnoutPoints);
+    if (s.crashDamage !== undefined) setU32(buf, CRASH_DAMAGE_AT, s.crashDamage);
+    if (s.takedownsOnline !== undefined) setU32(buf, TAKEDOWNS_ONLINE_AT, s.takedownsOnline);
+    if (s.takedowns !== undefined) setTakedowns(buf, s.takedowns);
+    if (s.slams !== undefined) setU32(buf, SLAMS_AT, s.slams);
+    if (s.slamsOnline !== undefined) setU32(buf, SLAMS_ONLINE_AT, s.slamsOnline);
+    if (s.raceEvents !== undefined) setU32(buf, RACE_EVENTS_AT, s.raceEvents);
+    if (s.raceEventsOnline !== undefined) setU32(buf, RACE_EVENTS_ONLINE_AT, s.raceEventsOnline);
+    if (s.crashEvents !== undefined) setU32(buf, CRASH_EVENTS_AT, s.crashEvents);
+    if (s.crashEventsOnline !== undefined) setU32(buf, CRASH_EVENTS_ONLINE_AT, s.crashEventsOnline);
+    if (s.oncoming) setLongest(buf, ONCOMING, s.oncoming.feet, s.oncoming.car);
+    if (s.drift) setLongest(buf, DRIFT, s.drift.feet, s.drift.car);
+    if (s.favorite !== undefined) setFavorite(buf, s.favorite);
+  }
+
   function info(buf) {
     var sig = flags(buf, SIG_TAKEDOWNS_AT, SIG_TAKEDOWNS), head = flags(buf, HEADLINES_AT, HEADLINES);
     return {
@@ -217,7 +336,8 @@
   var api = {
     SIZE: SIZE, SUM_AT: SUM_AT, SIG_AT: SIG_AT, NAME_AT: NAME_AT, NAME_MAX: NAME_MAX,
     EVENTS_AT: EVENTS_AT, EVENTS: EVENTS, SIG_TAKEDOWNS_AT: SIG_TAKEDOWNS_AT, SIG_TAKEDOWNS: SIG_TAKEDOWNS,
-    HEADLINES_AT: HEADLINES_AT, HEADLINES: HEADLINES, TARGET_COUNTERS: TARGET_COUNTERS,
+    HEADLINES_AT: HEADLINES_AT, HEADLINES: HEADLINES, TARGET_COUNTERS: TARGET_COUNTERS, CARS: CARS,
+    stats: stats, setStats: setStats, f32: f32, setF32: setF32,
     sha1: sha1, hmacSha1: hmacSha1, hex: hex, parseKey: parseKey, u32: u32, setU32: setU32,
     checksum: checksum, signature: signature, check: check, fix: fix,
     readName: readName, nameError: nameError, recordSlots: recordSlots, rename: rename,
